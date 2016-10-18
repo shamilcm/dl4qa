@@ -36,25 +36,15 @@ class BinaryBoWDense:
     def train_model(self, input, labels):
         self.model.fit(input, labels, nb_epoch=self.hyperparams.num_epochs, batch_size=self.hyperparams.batch_size)
 
-    def test_model(self, input, labels):
+    def save_model(self, out_file):
+        """
+        Save the model to a file
+        """
+        self.model.save_weights(out_file, overwrite='True')
+
+    def load_weights(self, weights_file):
+        self.model.load_weights(weights_file)
+
+    def predict(self, input):
         probs = self.model.predict(input, batch_size=self.hyperparams.batch_size)
-        correct_1 = 0
-        total_1=0
-        correct_0=0
-        total_0=0
-        cut_off=0.5
-        for i in range(0, len(probs)):
-            if labels[i]==1:
-                total_1 +=1
-            if probs[i] >= cut_off and labels[i] == 1:
-                correct_1 += 1
-            if  labels[i]==0:
-                total_0 +=1
-            if probs[i] < cut_off and labels[i] == 0:
-                correct_0 += 1
-        print "Accuracy 1: ", float(correct_1) / total_1
-        print "Accuracy 0: ", float(correct_0) / total_0
-        print "Avg. Accuracy: ", (float(correct_1) / total_1 + float(correct_0) / total_0)/2
-
-        print "Finished......"
-
+        return probs
