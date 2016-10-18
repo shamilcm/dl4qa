@@ -10,7 +10,8 @@ if __name__=="__main__":
     parser = argparse.ArgumentParser();
     parser.add_argument("-tr", "--trainset-path", dest="train_fname", required=True, help="train file")
     parser.add_argument("-tu", "--devset-path", dest="dev_fname", required=True, help="development file")
-    parser.add_argument("-ts", "--testset-name", required=False, dest="test_fname", help="test file")
+    parser.add_argument("-ts", "--testset-path", required=False, dest="test_fname", help="test file")
+    parser.add_argument("-tsref", "--testset-ref", required=False, dest="test_ref_fname", help="test reference file")
     parser.add_argument("-emb", "--emb-path", required=True, dest="w2v_fname", help="path/name of pretrained word embeddings (Word2Vec inary). ")
     parser.add_argument("-d", "--device", dest="device", default="gpu", help="The computing device (cpu or gpu). Default: gpu")
     parser.add_argument("-E", "--num-epochs", dest="num_epochs", default=20, type=int, help="Number of iterations (epochs). Default: 20")
@@ -61,9 +62,26 @@ devset.process(embeddings, stop_words)
 if(args.test_fname):
     testset.process(embeddings, stop_words)
 
-
+logger.info("Building model")
 from anssel import models
 hyperparams = models.HyperParams(num_epochs=args.num_epochs, batch_size=args.batch_size, emb_dim=embeddings.emb_dim)
 binbowdense = models.BinaryBoWDense(hyperparams=hyperparams)
+
+logger.info("Training")
 binbowdense.train_model(trainset.samples, trainset.labels)
-binbowdense.test_model(testset.samples, testset.labels)
+
+logger.info("Saving model")
+
+utils.mkdir_p(args.out_dir +'/models')
+num_epoch = binbowdense.hyperparams.num_epochs
+binbowdense.save_model(args.out_dir + '/models/model.epoch_' + str(num_epoch) + '.h5')
+
+logger.info("Testing")
+if (args.test_fname):
+    probs = binbowdense.predict(testset.samples)
+    from anssel import evaluator
+    evaluator.print_accuracy(probs, testset.labels)
+
+
+
+
