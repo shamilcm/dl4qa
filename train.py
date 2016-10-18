@@ -16,7 +16,7 @@ if __name__=="__main__":
     parser.add_argument("-d", "--device", dest="device", default="gpu", help="The computing device (cpu or gpu). Default: gpu")
     parser.add_argument("-E", "--num-epochs", dest="num_epochs", default=20, type=int, help="Number of iterations (epochs). Default: 20")
     parser.add_argument("-B", "--batch-size", dest="batch_size", default=100, type=int, help="Minibatch size for training. Default: 100")
-    parser.add_argument("-o", "--output-directory", dest="out_dir", help="The output directory for log file, model, etc.")
+    parser.add_argument("-dir", "--output-directory", dest="out_dir", help="The output directory for log file, model, etc.")
 
     args = parser.parse_args()
 
@@ -80,8 +80,11 @@ logger.info("Testing")
 if (args.test_fname):
     probs = binbowdense.predict(testset.samples)
     from anssel import evaluator
-    evaluator.print_accuracy(probs, testset.labels)
-
+    if args.test_ref_fname:
+        preds = evaluator.get_preds(ref_file=args.test_ref_fname, probs=probs, out_file=args.out_fname)
+        logger.info("MAP:" + str(evaluator.calc_mean_avg_prec(preds)))
+        logger.info("MRR:" + str(evaluator.calc_mean_reciprocal_rank(preds)))
+        logger.info("FSCORE:" + str(evaluator.calc_trigger_fscore(preds)))
 
 
 
