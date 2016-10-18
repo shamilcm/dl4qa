@@ -1,7 +1,6 @@
 import numpy as np
 import logging
 
-
 class Dataset:
 
     def __init__(self, dataset):
@@ -9,6 +8,7 @@ class Dataset:
         self.vocab = self.load_vocab();
         self.samples = None
         self.labels = None
+
     def load_vocab(self):
         """
         Loads vocabulary from the training file
@@ -60,7 +60,7 @@ class Dataset:
             if word in stop_words:
                 continue
             vec += embeddings.get_word_vec(word)
-        return vec                
+        return vec
 
 class Embeddings:
     def __init__(self, w2v_fname, vocab):
