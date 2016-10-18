@@ -130,7 +130,7 @@ if __name__=="__main__":
     train_file = sys.argv[1]
     word_vec_file=sys.argv[2]
     stop_words_file=sys.argv[3]
-    test_file=sys.argsv[4]
+    test_file=sys.argv[4]
 
     QASample=namedtuple("QASample","QsWords AnsWords Label")
 
