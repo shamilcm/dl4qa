@@ -1,17 +1,22 @@
+import os
+os.environ["THEANO_FLAGS"] = "mode=FAST_RUN,device=gpu,floatX=float32"
+
 import numpy as np
 from collections import namedtuple
 from keras.models import Sequential, Model
 from keras.layers import Dense, Activation, Merge, Input, merge,Flatten,Lambda
 from keras.layers.convolutional import Convolution1D
-from keras.optimizers import SGD
+from keras.optimizers import SGD,Adam, Adagrad
 from keras.layers.pooling import AveragePooling1D
-from Pooling import SumPooling1D
+#from Pooling import SumPooling1D,MeanOverTime
 from keras import backend as K
 import sys
 from anssel import evaluator as Score
 from collections import defaultdict
 
 vec_dim=300
+sent_vec_dim=300
+ans_len_cut_off=40
 
 def get_W(word_vecs, k=300):
     """
@@ -150,8 +155,8 @@ def get_bag_of_words_based_sentence_vec(words):
         else:
             vec += word_vecs["<unk>"]
         word_count += 1
-    # vec *= 100
-    # vec /= word_count
+    #vec *= 100
+    #vec /= word_count
     return vec
 
 def run_neural_model(train_qsdata,train_ansdata,train_label,test_qsdata,test_ansdata,ref_lines):
@@ -165,8 +170,9 @@ def run_neural_model(train_qsdata,train_ansdata,train_label,test_qsdata,test_ans
     labels = Activation('sigmoid', name='labels')(merged)
     model = Model(input=[qs_input, ans_input], output=[labels])
 
-    model.compile(loss={'labels': 'binary_crossentropy'}, optimizer=SGD(lr=0.001, momentum=0.9, nesterov=True),
+    model.compile(loss={'labels': 'binary_crossentropy'}, optimizer=Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0),
                   metrics=['accuracy'])
+    #SGD(lr=0.001, momentum=0.9, nesterov=True)
 
     for c in range(0,epoch):
         model.fit({'qs_input': train_qsdata, 'ans_input': train_ansdata}, {'labels': train_label}, nb_epoch=1,
@@ -210,6 +216,8 @@ def get_bigram_data(samples,max_qs_l,max_ans_l):
             else:
                 ansdata[sent_count][word_count] = word_vecs["<unk>"]
             word_count += 1
+            if word_count==40:
+                break
         labeldata[sent_count] = sample.Label
         sent_count += 1
     return qsdata,ansdata,labeldata
@@ -233,53 +241,65 @@ def run_bigram_model(train_samples, test_samples, ref_lines):
         if len(test_samples[i].AnsWords) > max_ans_l:
             max_ans_l = len(test_samples[i].AnsWords)
 
+    if max_ans_l > ans_len_cut_off:
+        max_ans_l = ans_len_cut_off
+
     Reduce = Lambda(lambda x: x[:, 0, :], output_shape=lambda shape: (shape[0], shape[-1]))
     train_qsdata,train_ansdata,train_labeldata=get_bigram_data(train_samples,max_qs_l,max_ans_l)
 
     qs_input = Input(shape=(max_qs_l,vec_dim,), dtype='float32', name='qs_input')
-    qsconvmodel=Convolution1D(nb_filter=vec_dim,filter_length=2,activation="tanh", border_mode='valid')(qs_input)
+    qsconvmodel=Convolution1D(nb_filter=sent_vec_dim,filter_length=2,activation="tanh", border_mode='valid')(qs_input)
     qsconvmodel=AveragePooling1D(pool_length=max_qs_l-1)(qsconvmodel)
+    #qsconvmodel=MeanOverTime()(qsconvmodel)
     qsconvmodel=Reduce(qsconvmodel)
 
+    qtm = Dense(output_dim=sent_vec_dim, activation='linear')(qsconvmodel)
+
     ans_input = Input(shape=(max_ans_l, vec_dim,), dtype='float32', name='ans_input')
-    ansconvmodel=Convolution1D(nb_filter=vec_dim, filter_length=2, activation="tanh", border_mode='valid')(ans_input)
+    ansconvmodel=Convolution1D(nb_filter=sent_vec_dim, filter_length=2, activation="tanh", border_mode='valid')(ans_input)
     ansconvmodel=AveragePooling1D(pool_length=max_ans_l-1)(ansconvmodel)
+    #ansconvmodel=MeanOverTime()(ansconvmodel)
     ansconvmodel=Reduce(ansconvmodel)
 
-    batch_size = 100
-    epoch = 5
-
-
-    qtm = Dense(output_dim=vec_dim, input_dim=vec_dim, activation='linear')(qsconvmodel)
     merged = merge([qtm, ansconvmodel], mode='dot', dot_axes=(1, 1))
     labels = Activation('sigmoid', name='labels')(merged)
     model = Model(input=[qs_input, ans_input], output=[labels])
 
-    model.compile(loss={'labels': 'binary_crossentropy'}, optimizer=SGD(lr=0.001, momentum=0.9, nesterov=True),
-                  metrics=['accuracy'])
+    model.compile(loss={'labels': 'binary_crossentropy'}, optimizer=Adagrad(lr=0.01, epsilon=1e-08, decay=0.0), metrics=['accuracy'])
+    #Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0)
+    #Adagrad(lr=0.01, epsilon=1e-08, decay=0.0)
+    #SGD(lr=0.01, momentum=0.9, nesterov=True)
+    test_qsdata, test_ansdata, test_labeldata = get_bigram_data(test_samples,max_qs_l,max_ans_l)
 
-    test_qsdata, test_ansdata, test_labeldata= get_bigram_data(test_samples,max_qs_l,max_ans_l)
+    batch_size = 100
+    epoch = 5
+
+    for epoch_itr in range(0,epoch):
+        model.fit({'qs_input': train_qsdata, 'ans_input': train_ansdata}, {'labels': train_labeldata}, nb_epoch=1,
+                  batch_size=batch_size)
+
+        probs = model.predict([test_qsdata, test_ansdata], batch_size=batch_size)
+
+        line_count = 0
+        pred_lines = defaultdict(list)
+        for ref_line in ref_lines:
+            ref_line = ref_line.replace('\n', '')
+            parts = ref_line.strip().split()
+            qid, aid, lbl = int(parts[0]), int(parts[2]), int(parts[3])
+            pred_lines[qid].append((aid, lbl, probs[line_count]))
+            line_count += 1
+        print "Mean Avg. Precision: ", Score.calc_mean_avg_prec(pred_lines)
+        print "Mean Reciprocal Rank: ", Score.calc_mean_reciprocal_rank(pred_lines)
 
 
-    model.fit({'qs_input': train_qsdata, 'ans_input': train_ansdata}, {'labels': train_labeldata}, nb_epoch=epoch, batch_size = batch_size)
-    probs = model.predict([test_qsdata, test_ansdata], batch_size=batch_size)
-    line_count=0
-    pred_lines=defaultdict(list)
-    for ref_line in ref_lines:
-        ref_line=ref_line.replace('\n','')
-        parts = ref_line.strip().split()
-        qid, aid, lbl = int(parts[0]), int(parts[2]), int(parts[3])
-        pred_lines[qid].append((aid, lbl,probs[line_count]))
-        line_count +=1
-    print "Mean Avg. Precision: ", Score.calc_mean_avg_prec(pred_lines)
-    print "Mean Reciprocal Rank: ",Score.calc_mean_reciprocal_rank(pred_lines)
 
 if __name__=="__main__":
 
     #train_file = sys.argv[1]
     #word_vec_file=sys.argv[2]
     #stop_words_file=sys.argv[3]
-    #test_file=sys.argsv[4]
+    #test_file=sys.argv[4]
+    #ref_file=sys.argv[5]
 
     train_file="data/WikiQASent-train.txt"
     word_vec_file="data/GoogleNews-vectors-negative300.bin"
