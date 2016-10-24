@@ -9,10 +9,10 @@ from keras.layers import Dense, Activation, Merge, Input, merge,Flatten,Lambda
 from keras.layers.convolutional import Convolution1D
 from keras.optimizers import SGD,Adam, Adagrad
 from keras.layers.pooling import AveragePooling1D
-from Pooling import SumPooling1D,MeanOverTime
+#from Pooling import SumPooling1D,MeanOverTime
 from keras import backend as K
 import sys
-import Score
+from anssel import Score
 from collections import defaultdict
 from sklearn import linear_model
 from keras.models import load_model
@@ -176,7 +176,7 @@ def run_neural_model(train_qsdata,train_ansdata,train_label,test_qsdata,test_ans
     model.compile(loss={'labels': 'binary_crossentropy'}, optimizer=Adam(lr=0.001, beta_1=0.9, beta_2=0.999, epsilon=1e-08, decay=0.0),
                   metrics=['accuracy'])
     #SGD(lr=0.001, momentum=0.9, nesterov=True)
-
+    print train_qsdata.shape, dev_qsdata.shape
     for c in range(0,epoch):
         model.fit({'qs_input': train_qsdata, 'ans_input': train_ansdata}, {'labels': train_label}, nb_epoch=1,
                   batch_size=batch_size)
