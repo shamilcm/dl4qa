@@ -4,17 +4,19 @@ from anssel.data import Dataset, Embeddings
 import os
 import sys
 from anssel import utils
-
+# Test#
 # Main method. The arguments to the training script!
 if __name__=="__main__":
     parser = argparse.ArgumentParser();
     parser.add_argument("-tr", "--trainset-path", dest="train_fname", required=True, help="train file")
-    parser.add_argument("-tu", "--devset-path", dest="dev_fname", required=True, help="development file")
-    parser.add_argument("-ts", "--testset-path", required=False, dest="test_fname", help="test file")
-    parser.add_argument("-tsref", "--testset-ref", required=False, dest="test_ref_fname", help="test reference file")
+    parser.add_argument("-dev", "--devset-path", dest="dev_fname", required=True, help="development file")
+    parser.add_argument("-devr", "--devset-ref", required=True, dest="dev_ref_fname", help="test reference file")
+    parser.add_argument("-test", "--testset-path", required=False, dest="test_fname", help="test file")
+    parser.add_argument("-testr", "--testset-ref", required=False, dest="test_ref_fname", help="test reference file")
     parser.add_argument("-emb", "--emb-path", required=True, dest="w2v_fname", help="path/name of pretrained word embeddings (Word2Vec inary). ")
     parser.add_argument("-d", "--device", dest="device", default="gpu", help="The computing device (cpu or gpu). Default: gpu")
-    parser.add_argument("-E", "--num-epochs", dest="num_epochs", default=20, type=int, help="Number of iterations (epochs). Default: 20")
+    parser.add_argument("-s", "--system", dest="system", default="bow", help="bow | bigram | compdecomp")
+    parser.add_argument("-E", "--num-epochs", dest="num_epochs", default=20, type=int, help="Number of iterations (epochs). Default: 10")
     parser.add_argument("-B", "--batch-size", dest="batch_size", default=100, type=int, help="Minibatch size for training. Default: 100")
     parser.add_argument("-dir", "--output-directory", dest="out_dir", help="The output directory for log file, model, etc.")
 
@@ -32,12 +34,10 @@ os.environ['THEANO_FLAGS'] = 'device=' + args.device
 ###########################
 # Loading datasets
 
-logger.info("Loading training set")
+logger.info("Loading datasets")
 trainset = Dataset(args.train_fname)
-logger.info("Loading development set")
 devset = Dataset(args.dev_fname)
 if(args.test_fname):
-    logger.info("Loading test set")
     testset = Dataset(args.test_fname)
 
 
@@ -65,26 +65,37 @@ if(args.test_fname):
 logger.info("Building model")
 from anssel import models
 hyperparams = models.HyperParams(num_epochs=args.num_epochs, batch_size=args.batch_size, emb_dim=embeddings.emb_dim)
-binbowdense = models.BinaryBoWDense(hyperparams=hyperparams)
+
+if args.system == "bow":
+    #system = models.BinaryBoWDense(hyperparams=hyperparams)
+    system = models.Wang2016CNN(hyperparams=hyperparams)
+
 
 logger.info("Training")
-binbowdense.train_model(trainset.samples, trainset.labels)
-
-logger.info("Saving model")
-
+from anssel import evaluator
 utils.mkdir_p(args.out_dir +'/models')
-num_epoch = binbowdense.hyperparams.num_epochs
-binbowdense.save_model(args.out_dir + '/models/model.epoch_' + str(num_epoch) + '.h5')
+best_dev_map = 0
+best_model = None
+train_in = system.get_input(trainset.samples)
+train_labels = system.get_labels(trainset.labels)
+dev_in = system.get_input(devset.samples)
+for epoch in xrange(system.hyperparams.num_epochs):
+    logger.info("Epoch:" + str(epoch))
+    system.train_model_by_epoch(train_in, train_labels)  # training for one epoch
+    probs = system.predict(dev_in)
+    preds = evaluator.get_preds(ref_file=args.dev_ref_fname, probs=probs)
+    dev_map = evaluator.calc_mean_avg_prec(preds)
+    dev_mrr = evaluator.calc_mean_reciprocal_rank(preds)
+    logger.info("Devset MAP=" + str(dev_map) + ", MRR=" + str(dev_mrr))
+    system.save_model(args.out_dir + '/models/model.epoch_' + str(epoch) + '.h5')
 
-logger.info("Testing")
+
+logger.info("Evaluation on test set")
 if (args.test_fname):
-    probs = binbowdense.predict(testset.samples)
-    from anssel import evaluator
+    probs = system.predict(system.get_input(testset.samples))
     if args.test_ref_fname:
-        preds = evaluator.get_preds(ref_file=args.test_ref_fname, probs=probs, out_file=args.out_fname)
+        preds = evaluator.get_preds(ref_file=args.test_ref_fname, probs=probs)
         logger.info("MAP:" + str(evaluator.calc_mean_avg_prec(preds)))
         logger.info("MRR:" + str(evaluator.calc_mean_reciprocal_rank(preds)))
-        logger.info("FSCORE:" + str(evaluator.calc_trigger_fscore(preds)))
-
 
 

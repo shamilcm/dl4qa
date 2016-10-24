@@ -13,6 +13,7 @@ if __name__=="__main__":
     parser.add_argument("-w", "--weights-file", required=True, dest="weights_fname", help="path/name of model. ")
     parser.add_argument("-emb", "--emb-path", required=True, dest="w2v_fname", help="path/name of pretrained word embeddings (Word2Vec inary). ")
     parser.add_argument( "-o", "--out-file", required=False, dest="out_fname", help="path to output rank file.. ")
+    parser.add_argument("-s", "--system", dest="system", default="bow", help="bow | bigram | compdecomp")
     parser.add_argument("-d", "--device", dest="device", default="gpu", help="The computing device (cpu or gpu). Default: gpu")
     args = parser.parse_args()
 
@@ -63,4 +64,3 @@ from anssel import evaluator
 preds = evaluator.get_preds(ref_file=args.test_ref_fname, probs=probs, out_file=args.out_fname)
 logger.info("MAP:" + str(evaluator.calc_mean_avg_prec(preds)))
 logger.info("MRR:" + str(evaluator.calc_mean_reciprocal_rank(preds)))
-logger.info("FSCORE:" + str(evaluator.calc_trigger_fscore(preds)))
