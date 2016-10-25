@@ -145,8 +145,7 @@ class Wang2016CNN(BaseSystem):
         #for ans_vecs in asamples:
         #    ainputs_list.append(np.sum(ans_vecs, axis=0))
         return [qplust_tensor, qminus_tensor, aplus_tensor, aminus_tensor]
-		
-		return [np.array(qinputs_list), np.array(ainputs_list)]
+
     
     def compose_decompose(self, qmatrix, amatrix):
         qhatmatrix, ahatmatrix = self.f_match(qmatrix, amatrix, window_size=3)
