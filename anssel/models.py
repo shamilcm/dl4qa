@@ -2,11 +2,14 @@ import logging
 import numpy as np
 np.random.seed(1337)
 from keras.models import Sequential, Model
-from keras.layers import Dense,Activation,Merge,Input, Lambda,merge, Convolution1D, MaxPooling1D
+from keras.layers import Dense,Activation,Merge,Input, Lambda,merge, Convolution1D, MaxPooling1D, Masking, Reshape
 from keras.optimizers import SGD
 import keras.backend as K
 import sys
 from scipy.spatial.distance import cdist
+
+from anssel import utils
+logger = logging.getLogger(__name__)
 
 ### Hyper Parameters Class
 class HyperParams:
@@ -57,7 +60,6 @@ class BinaryBoWDense(BaseSystem):
         logging.info("Initializing Binary Bag-of-words Model")
         self.hyperparams = hyperparams
 
-
         s1_input = Input(shape=(hyperparams.emb_dim,),dtype='float32',name='s1_input')
         s2_input = Input(shape=(hyperparams.emb_dim,),dtype='float32',name='s2_input')
         s1_dense = Dense(output_dim=hyperparams.emb_dim,input_dim=hyperparams.emb_dim,activation='linear')(s1_input)
@@ -79,27 +81,63 @@ class BinaryBoWDense(BaseSystem):
       
 
     def get_labels(self, labels):
+        logger.info("Input : ")
+        logger.info(np.array(labels))
         return np.array(labels)
 
 # Wang et al (2016) bag-of-words model for binary classification
 class Wang2016CNN(BaseSystem):
     def __init__(self, hyperparams):
-        logging.info("Initializing Binary Bag-of-words Model")
+        from my_layers import MeanOverTime, MulConstant, Conv1DWithMasking
+        
+        logging.info("Initializing Wang2016CNN Model")
         self.hyperparams = hyperparams
-        ## Dummy model. Put actual model from steven's code!
-        qplus_input = Masking(mask_value=999)
-        qminus_input = Masking(mask_value=999)
-        aplus_input = Masking(mask_value=999)
-        aminus_input = Masking(mask_value=999)
+        
+        
+        logger.error(hyperparams.emb_dim)
+        qplus_input = Input(shape=(None,300),dtype='float32')
+        qminus_input = Input(shape=(None,300),dtype='float32')
+        aplus_input = Input(shape=(None,300),dtype='float32')
+        aminus_input = Input(shape=(None,300),dtype='float32')
+        
+        # qplus_input_reshape = Reshape((1,3))(qplus_input)
+        # qminus_input_reshape = Reshape((1,3))(qminus_input)
+        # aplus_input_reshape = Reshape((1,3))(aplus_input)
+        # aminus_input_reshape = Reshape((1,3))(aminus_input)
+        
+        # qplus_input_masking = Masking(mask_value=999)(qplus_input)
+        # qminus_input_masking = Masking(mask_value=999)(qminus_input)
+        # aplus_input_masking = Masking(mask_value=999)(aplus_input)
+        # aminus_input_masking = Masking(mask_value=999)(aminus_input)
+        
+        cnn_border_mode = 'same'
+        convQplus1 = Convolution1D(nb_filter=500, filter_length=1, border_mode=cnn_border_mode, subsample_length=1)(qplus_input)
+        convQminus1 = Convolution1D(nb_filter=500, filter_length=1, border_mode=cnn_border_mode, subsample_length=1)(qminus_input)
+        convAplus1 = Convolution1D(nb_filter=500, filter_length=1, border_mode=cnn_border_mode, subsample_length=1)(aplus_input)
+        convAminus1 = Convolution1D(nb_filter=500, filter_length=1, border_mode=cnn_border_mode, subsample_length=1)(aminus_input)
 
-        #s1_input = Input(shape=(hyperparams.emb_dim,),dtype='float32',name='s1_input')
-        #s2_input = Input(shape=(hyperparams.emb_dim,),dtype='float32',name='s2_input')
-        #s1_dense = Dense(output_dim=hyperparams.emb_dim,input_dim=hyperparams.emb_dim,activation='linear')(s1_input)
-        #s1_s2_merged = merge([s1_dense, s2_input], mode='dot', dot_axes=(1, 1))
-        #labels=Activation('sigmoid',name='labels')(s1_s2_merged)
-        #self.model=Model(input=[s1_input,s2_input],output=[labels])
-        #self.model.compile(loss={'labels':'binary_crossentropy'}, optimizer=SGD(lr=self.hyperparams.learning_rate, momentum=self.hyperparams.momentum, nesterov=True), metrics=['accuracy'])
-
+        mergedQ1 = merge([convQplus1, convQminus1], mode='sum', concat_axis=-1)
+        mergedQtanh = Activation('tanh')(mergedQ1)
+        maxPoolQ = MeanOverTime()(mergedQtanh)
+        
+        mergedA1 = merge([convAplus1, convAminus1], mode='sum', concat_axis=-1)
+        mergedAtanh = Activation('tanh')(mergedA1)
+        maxPoolA = MeanOverTime()(mergedAtanh)
+        
+        combinedOutput = merge([maxPoolQ, maxPoolA], mode='concat', concat_axis=-1)
+        
+        
+        # combinedOutput = merge([qplus_input, qminus_input], mode='concat', concat_axis=-1)
+        densed = Dense(1)(combinedOutput)
+        score = Activation('sigmoid')(densed)
+        self.model = Model(input=[qplus_input,qminus_input,aplus_input,aminus_input], output=score)
+        
+        loss = 'binary_crossentropy'
+        metric = 'accuracy'
+        optimizer = SGD(lr=self.hyperparams.learning_rate, momentum=self.hyperparams.momentum, nesterov=True)
+        
+        self.model.compile(loss=loss, optimizer=optimizer, metrics=[metric])
+        
     def get_input(self, samples):
         qinputs_list = []
         ainputs_list = []
@@ -107,8 +145,9 @@ class Wang2016CNN(BaseSystem):
         asamples = samples[1]
         q_maxlen = max(qsample.shape[0] for qsample in qsamples)
         a_maxlen = max(asample.shape[0] for asample in asamples)
-        print q_maxlen, a_maxlen
-        logging.info("Processing input for Wang et al.")
+        logger.info("q_maxlen : %i" % q_maxlen)
+        logger.info("a_maxlen : %i" % a_maxlen)
+        logger.info("Processing input for Wang et al.")
         maxlen_q = -1
         qplus_list = []
         qminus_list = []
@@ -144,7 +183,20 @@ class Wang2016CNN(BaseSystem):
         #    qinputs_list.append(np.sum(ques_vecs, axis=0))
         #for ans_vecs in asamples:
         #    ainputs_list.append(np.sum(ans_vecs, axis=0))
-        return [qplust_tensor, qminus_tensor, aplus_tensor, aminus_tensor]
+        
+        logger.info("qplus_tensor : ")
+        # logger.info(qplus_tensor)
+        logger.info(qplus_tensor.shape)
+        logger.info("qminus_tensor : ")
+        # logger.info(qminus_tensor)
+        logger.info(qminus_tensor.shape)
+        logger.info("aplus_tensor : ")
+        # logger.info(aplus_tensor)
+        logger.info(aplus_tensor.shape)
+        logger.info("aminus_tensor : ")
+        # logger.info(aminus_tensor)
+        logger.info(aminus_tensor.shape)
+        return [qplus_tensor, qminus_tensor, aplus_tensor, aminus_tensor]
 
     
     def compose_decompose(self, qmatrix, amatrix):
