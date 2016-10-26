@@ -92,45 +92,49 @@ class Wang2016CNN(BaseSystem):
         
         logging.info("Initializing Wang2016CNN Model")
         self.hyperparams = hyperparams
-        
-        
-        logger.error(hyperparams.emb_dim)
-        qplus_input = Input(shape=(None,300),dtype='float32')
-        qminus_input = Input(shape=(None,300),dtype='float32')
-        aplus_input = Input(shape=(None,300),dtype='float32')
-        aminus_input = Input(shape=(None,300),dtype='float32')
-        
-        # qplus_input_reshape = Reshape((1,3))(qplus_input)
-        # qminus_input_reshape = Reshape((1,3))(qminus_input)
-        # aplus_input_reshape = Reshape((1,3))(aplus_input)
-        # aminus_input_reshape = Reshape((1,3))(aminus_input)
-        
-        # qplus_input_masking = Masking(mask_value=999)(qplus_input)
-        # qminus_input_masking = Masking(mask_value=999)(qminus_input)
-        # aplus_input_masking = Masking(mask_value=999)(aplus_input)
-        # aminus_input_masking = Masking(mask_value=999)(aminus_input)
-        
-        cnn_border_mode = 'same'
-        convQplus1 = Convolution1D(nb_filter=500, filter_length=1, border_mode=cnn_border_mode, subsample_length=1)(qplus_input)
-        convQminus1 = Convolution1D(nb_filter=500, filter_length=1, border_mode=cnn_border_mode, subsample_length=1)(qminus_input)
-        convAplus1 = Convolution1D(nb_filter=500, filter_length=1, border_mode=cnn_border_mode, subsample_length=1)(aplus_input)
-        convAminus1 = Convolution1D(nb_filter=500, filter_length=1, border_mode=cnn_border_mode, subsample_length=1)(aminus_input)
 
-        mergedQ1 = merge([convQplus1, convQminus1], mode='sum', concat_axis=-1)
-        mergedQtanh = Activation('tanh')(mergedQ1)
-        maxPoolQ = MeanOverTime()(mergedQtanh)
+        cnn_dim = 500
+        cnn_border_mode = 'same'
         
-        mergedA1 = merge([convAplus1, convAminus1], mode='sum', concat_axis=-1)
-        mergedAtanh = Activation('tanh')(mergedA1)
-        maxPoolA = MeanOverTime()(mergedAtanh)
-        
-        combinedOutput = merge([maxPoolQ, maxPoolA], mode='concat', concat_axis=-1)
-        
-        
-        # combinedOutput = merge([qplus_input, qminus_input], mode='concat', concat_axis=-1)
+        sequenceSplus = Input(shape=(None,300), dtype='float32')
+        convSplus1 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=1, border_mode=cnn_border_mode, subsample_length=1)(sequenceSplus)
+        convSplus2 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=2, border_mode=cnn_border_mode, subsample_length=1)(sequenceSplus)
+        convSplus3 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=3, border_mode=cnn_border_mode, subsample_length=1)(sequenceSplus)
+
+        sequenceSminus = Input(shape=(None,300), dtype='float32')
+        convSminus1 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=1, border_mode=cnn_border_mode, subsample_length=1)(sequenceSminus)
+        convSminus2 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=2, border_mode=cnn_border_mode, subsample_length=1)(sequenceSminus)
+        convSminus3 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=3, border_mode=cnn_border_mode, subsample_length=1)(sequenceSminus)
+
+        sequenceTplus = Input(shape=(None,300), dtype='float32')
+        convTplus1 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=1, border_mode=cnn_border_mode, subsample_length=1)(sequenceTplus)
+        convTplus2 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=2, border_mode=cnn_border_mode, subsample_length=1)(sequenceTplus)
+        convTplus3 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=3, border_mode=cnn_border_mode, subsample_length=1)(sequenceTplus)
+
+        sequenceTminus = Input(shape=(None,300), dtype='float32')
+        convTminus1 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=1, border_mode=cnn_border_mode, subsample_length=1)(sequenceTminus)
+        convTminus2 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=2, border_mode=cnn_border_mode, subsample_length=1)(sequenceTminus)
+        convTminus3 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=3, border_mode=cnn_border_mode, subsample_length=1)(sequenceTminus)
+
+        mergedS1 = merge([convSplus1, convSminus1], mode='sum', concat_axis=-1)
+        mergedS2 = merge([convSplus2, convSminus2], mode='sum', concat_axis=-1)
+        mergedS3 = merge([convSplus3, convSminus3], mode='sum', concat_axis=-1)
+        mergedS  = merge([mergedS1, mergedS2, mergedS3], mode='concat', concat_axis=-1)
+        mergedStanh = Activation('tanh')(mergedS)
+        maxPoolS = MeanOverTime()(mergedStanh) # PLEASE REMEMBER TO CHANGE THIS TO MAX POOLING
+
+        mergedT1 = merge([convTplus1, convTminus1], mode='sum', concat_axis=-1)
+        mergedT2 = merge([convTplus2, convTminus2], mode='sum', concat_axis=-1)
+        mergedT3 = merge([convTplus3, convTminus3], mode='sum', concat_axis=-1)
+        mergedT  = merge([mergedT1, mergedT2, mergedT3], mode='concat', concat_axis=-1)
+        mergedTtanh = Activation('tanh')(mergedT)
+        maxPoolT = MeanOverTime()(mergedTtanh) # PLEASE REMEMBER TO CHANGE THIS TO MAX POOLING
+
+        combinedOutput = merge([maxPoolS, maxPoolT], mode='concat', concat_axis=-1)
         densed = Dense(1)(combinedOutput)
         score = Activation('sigmoid')(densed)
-        self.model = Model(input=[qplus_input,qminus_input,aplus_input,aminus_input], output=score)
+        
+        self.model = Model(input=[sequenceSplus,sequenceSminus,sequenceTplus,sequenceTminus], output=score)
         
         loss = 'binary_crossentropy'
         metric = 'accuracy'
@@ -157,12 +161,12 @@ class Wang2016CNN(BaseSystem):
             qplus, qminus, aplus, aminus = self.compose_decompose(qmatrix, amatrix)
             # Padding questions
             qpad_width = ((0,q_maxlen - qplus.shape[0]),(0,0))
-            qplus_pad  = np.pad(qplus,  pad_width=qpad_width, mode='constant', constant_values=999)
-            qminus_pad = np.pad(qminus, pad_width=qpad_width, mode='constant', constant_values=999)
+            qplus_pad  = np.pad(qplus,  pad_width=qpad_width, mode='constant', constant_values=0)
+            qminus_pad = np.pad(qminus, pad_width=qpad_width, mode='constant', constant_values=0)
             # Padding answers
             apad_width = ((0,a_maxlen - aplus.shape[0]),(0,0))
-            aplus_pad  = np.pad(aplus,  pad_width=apad_width, mode='constant', constant_values=999)
-            aminus_pad = np.pad(aminus, pad_width=apad_width, mode='constant', constant_values=999)
+            aplus_pad  = np.pad(aplus,  pad_width=apad_width, mode='constant', constant_values=0)
+            aminus_pad = np.pad(aminus, pad_width=apad_width, mode='constant', constant_values=0)
             # Adding these padded matrices to list
             qplus_list.append(qplus_pad)
             qminus_list.append(qminus_pad)
