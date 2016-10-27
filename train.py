@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 utils.set_logger(args.out_dir)
 
 ## Setting devie to use 
-os.environ['THEANO_FLAGS'] = 'device=' + args.device + ',mode=FAST_RUN,floatX=float32,dnn.conv.algo_bwd_filter=deterministic,dnn.conv.algo_bwd_data=deterministic'
+os.environ['THEANO_FLAGS'] = 'device=' + args.device
 
 
 ###########################
@@ -49,13 +49,16 @@ embeddings = Embeddings(args.w2v_fname, trainset.vocab)
 #############################
 # Processing datasets with word embeddings
 logger.info("Processing datasets with word embeddings")
-curdir = os.path.dirname(os.path.abspath(__file__))
-stopwords_fname = os.path.join(curdir, 'resources/short-stopwords.txt')
-stop_words=dict()
-with open(stopwords_fname) as f:
-    for line in f:
-        line = line.strip()
-        stop_words[line] = True
+if args.system == "bow":
+    curdir = os.path.dirname(os.path.abspath(__file__))
+    stopwords_fname = os.path.join(curdir, 'resources/short-stopwords.txt')
+    stop_words=dict()
+    with open(stopwords_fname) as f:
+        for line in f:
+            line = line.strip()
+            stop_words[line] = True
+else:
+    stop_words = None
 
 trainset.process(embeddings, stop_words)
 devset.process(embeddings, stop_words)
@@ -67,7 +70,8 @@ from anssel import models
 hyperparams = models.HyperParams(num_epochs=args.num_epochs, batch_size=args.batch_size, emb_dim=embeddings.emb_dim)
 
 if args.system == "bow":
-    # system = models.BinaryBoWDense(hyperparams=hyperparams)
+    system = models.BinaryBoWDense(hyperparams=hyperparams)
+elif args.system == "compdecomp":
     system = models.Wang2016CNN(hyperparams=hyperparams)
 
 
@@ -83,7 +87,7 @@ for epoch in xrange(system.hyperparams.num_epochs):
     logger.info("Epoch:" + str(epoch))
     system.train_model_by_epoch(train_in, train_labels)  # training for one epoch
     probs = system.predict(dev_in)
-    preds = evaluator.get_preds(ref_file=args.dev_ref_fname, probs=probs, out_file=args.out_dir+"/probs"+str(epoch))
+    preds = evaluator.get_preds(ref_file=args.dev_ref_fname, probs=probs)
     dev_map = evaluator.calc_mean_avg_prec(preds)
     dev_mrr = evaluator.calc_mean_reciprocal_rank(preds)
     logger.info("Devset MAP=" + str(dev_map) + ", MRR=" + str(dev_mrr))
