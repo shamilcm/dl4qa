@@ -99,52 +99,44 @@ class Wang2016CNN(BaseSystem):
         sequenceSplus = Input(shape=(None,300), dtype='float32')
         sequenceSminus = Input(shape=(None,300), dtype='float32')
 
-        # sequenceS = merge([sequenceSplus,sequenceSminus], mode='concat', concat_axis=-1)
+        sequenceS = merge([sequenceSplus,sequenceSminus], mode='concat', concat_axis=-1)
         # sequenceS = Masking(mask_value=0.0)(sequenceS)
 
-        # convS1 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=1, border_mode=cnn_border_mode, subsample_length=1)(sequenceS)
-        # convS2 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=2, border_mode=cnn_border_mode, subsample_length=1)(sequenceS)
-        # convS3 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=3, border_mode=cnn_border_mode, subsample_length=1)(sequenceS)
+        convS1 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=1, border_mode=cnn_border_mode, subsample_length=1)(sequenceS)
+        convS2 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=2, border_mode=cnn_border_mode, subsample_length=1)(sequenceS)
+        convS3 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=3, border_mode=cnn_border_mode, subsample_length=1)(sequenceS)
 
-        # sTanh1 = Activation('tanh')(convS1)
-        # sTanh2 = Activation('tanh')(convS2)
-        # sTanh3 = Activation('tanh')(convS3)
+        sTanh1 = Activation('tanh')(convS1)
+        sTanh2 = Activation('tanh')(convS2)
+        sTanh3 = Activation('tanh')(convS3)
 
-        # svector1 = MeanOverTime()(sTanh1)
-        # svector2 = MeanOverTime()(sTanh2)
-        # svector3 = MeanOverTime()(sTanh3)
+        svector1 = MaxOverTime(mask_zero=False)(sTanh1)
+        svector2 = MaxOverTime(mask_zero=False)(sTanh2)
+        svector3 = MaxOverTime(mask_zero=False)(sTanh3)
 
-        # svector = merge([svector1, svector2, svector3], mode='concat', concat_axis=-1)
+        svector = merge([svector1, svector2, svector3], mode='concat', concat_axis=-1)
 
         sequenceTplus = Input(shape=(None,300), dtype='float32')
         sequenceTminus = Input(shape=(None,300), dtype='float32')
 
-        # sequenceT = merge([sequenceTplus,sequenceTminus], mode='concat', concat_axis=-1)
+        sequenceT = merge([sequenceTplus,sequenceTminus], mode='concat', concat_axis=-1)
         # sequenceT = Masking(mask_value=0.0)(sequenceT)
 
-        # convT1 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=1, border_mode=cnn_border_mode, subsample_length=1)(sequenceT)
-        # convT2 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=2, border_mode=cnn_border_mode, subsample_length=1)(sequenceT)
-        # convT3 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=3, border_mode=cnn_border_mode, subsample_length=1)(sequenceT)
+        convT1 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=1, border_mode=cnn_border_mode, subsample_length=1)(sequenceT)
+        convT2 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=2, border_mode=cnn_border_mode, subsample_length=1)(sequenceT)
+        convT3 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=3, border_mode=cnn_border_mode, subsample_length=1)(sequenceT)
         
-        # tTanh1 = Activation('tanh')(convT1)
-        # tTanh2 = Activation('tanh')(convT2)
-        # tTanh3 = Activation('tanh')(convT3)
+        tTanh1 = Activation('tanh')(convT1)
+        tTanh2 = Activation('tanh')(convT2)
+        tTanh3 = Activation('tanh')(convT3)
 
-        # tvector1 = MeanOverTime()(tTanh1)
-        # tvector2 = MeanOverTime()(tTanh2)
-        # tvector3 = MeanOverTime()(tTanh3)
+        tvector1 = MaxOverTime(mask_zero=False)(tTanh1)
+        tvector2 = MaxOverTime(mask_zero=False)(tTanh2)
+        tvector3 = MaxOverTime(mask_zero=False)(tTanh3)
 
-        # tvector = merge([tvector1, tvector2, tvector3], mode='concat', concat_axis=-1)
+        tvector = merge([tvector1, tvector2, tvector3], mode='concat', concat_axis=-1)
 
-        # combinedOutput = merge([svector, tvector], mode='concat', concat_axis=-1)
-
-        # start test
-        splus = MaxOverTime(mask_zero=False)(sequenceSplus)
-        sminus = MaxOverTime(mask_zero=False)(sequenceSminus)
-        tplus = MaxOverTime(mask_zero=False)(sequenceTplus)
-        tminus = MaxOverTime(mask_zero=False)(sequenceTminus)
-        combinedOutput = merge([splus,sminus,tplus,tminus], mode='concat', concat_axis=-1)
-        # end test
+        combinedOutput = merge([svector, tvector], mode='concat', concat_axis=-1)
 
         densed = Dense(1)(combinedOutput)
         score = Activation('sigmoid')(densed)
@@ -153,7 +145,7 @@ class Wang2016CNN(BaseSystem):
         
         loss = 'binary_crossentropy'
         metric = 'accuracy'
-        algorithm = 'sgd'
+        algorithm = 'adam'
         
         ###############################################################################################################################
         ## Optimizer algorithm
@@ -193,7 +185,7 @@ class Wang2016CNN(BaseSystem):
         aplus_list = []
         aminus_list = []
 
-        for qmatrix, amatrix in zip(qsamples[:5000], asamples[:5000]):
+        for qmatrix, amatrix in zip(qsamples, asamples):
             qplus, qminus, aplus, aminus = self.compose_decompose(qmatrix, amatrix)
             # Padding questions
             qpad_width = ((0,q_maxlen - qplus.shape[0]),(0,0))
@@ -280,6 +272,4 @@ class Wang2016CNN(BaseSystem):
 
 
     def get_labels(self, labels):
-        logger.info(np.array(labels[:min(5000,len(labels))]))
-        logger.info(np.sum(np.array(labels[:min(5000,len(labels))])))
-        return np.array(labels[:min(5000,len(labels))])
+        return np.array(labels)

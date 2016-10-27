@@ -29,7 +29,8 @@ utils.set_logger(args.out_dir)
 
 ## Setting devie to use 
 os.environ['THEANO_FLAGS'] = 'device=' + args.device
-
+os.environ['THEANO_FLAGS'] = ',mode=FAST_RUN'
+os.environ['THEANO_FLAGS'] = ',floatX=float32'
 
 ###########################
 # Loading datasets
