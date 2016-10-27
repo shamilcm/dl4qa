@@ -2,6 +2,11 @@ import numpy as np
 import logging
 import sys
 
+
+from anssel import utils
+logger = logging.getLogger(__name__)
+
+
 class Dataset:
 
     def __init__(self, dataset):
@@ -58,26 +63,27 @@ class Dataset:
         self.labels = labels_list
    
 
-    def get_sample(self, words, embeddings, stop_words):
+    def get_sample(self, words, embeddings, stop_words=None):
         """
         Given a sentence, gets the input in the required format.
         """
         vecs = []
         vec = np.zeros(embeddings.emb_dim, dtype='float32')
         for word in words:
-            if word in stop_words:
+            if stop_words is not None and word in stop_words:
                 continue
             vec = embeddings.get_word_vec(word)
             vecs.append(np.array(vec))
-        if vecs == []:  # if all words are removed as stop words, send a 0 
-            vecs.append(np.zeros(embeddings.emb_dim))
+        if vecs == []:  # if all words are removed as stop words, send a 0
+            logging.warning("Encountered an empty sample!") 
+            vecs.append(embeddings.get_word_vec("<unk>"))
         return np.array(vecs)
 
 class Embeddings:
     def __init__(self, w2v_fname, vocab):
-        self.word_vecs, self.emb_dim = self.load_word2vec(w2v_fname, vocab)
+        self.word_vecs, self.emb_dim = self.load_word2vec(w2v_fname)
 
-    def load_word2vec(self, fname, vocab):
+    def load_word2vec(self, fname, vocab=None):
         """
         Loads word vecs from Google (Mikolov) word2vec. Assumes format is correct!
         """
@@ -95,10 +101,14 @@ class Embeddings:
                         break
                     if ch != '\n':
                         word.append(ch)
-                if word in vocab:
-                    word_vecs[word] = np.fromstring(f.read(binary_len), dtype='float32')
+                if vocab is not None:
+                    if word in vocab:
+                        word_vecs[word] = np.fromstring(f.read(binary_len), dtype='float32')
+                    else:
+                        f.read(binary_len)
                 else:
-                    f.read(binary_len)
+                    word_vecs[word] = np.fromstring(f.read(binary_len), dtype='float32')
+                    
         word_vecs["<unk>"] = np.random.uniform(-0.25, 0.25, emb_dim)
         return word_vecs, emb_dim
 
