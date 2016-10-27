@@ -28,7 +28,7 @@ logger = logging.getLogger(__name__)
 utils.set_logger(args.out_dir)
 
 ## Setting devie to use 
-os.environ['THEANO_FLAGS'] = 'device=' + args.device
+os.environ['THEANO_FLAGS'] = 'device=' + args.device + ',mode=FAST_RUN,floatX=float32,dnn.conv.algo_bwd_filter=deterministic,dnn.conv.algo_bwd_data=deterministic'
 
 
 ###########################
@@ -67,7 +67,7 @@ from anssel import models
 hyperparams = models.HyperParams(num_epochs=args.num_epochs, batch_size=args.batch_size, emb_dim=embeddings.emb_dim)
 
 if args.system == "bow":
-    #system = models.BinaryBoWDense(hyperparams=hyperparams)
+    # system = models.BinaryBoWDense(hyperparams=hyperparams)
     system = models.Wang2016CNN(hyperparams=hyperparams)
 
 
@@ -83,7 +83,7 @@ for epoch in xrange(system.hyperparams.num_epochs):
     logger.info("Epoch:" + str(epoch))
     system.train_model_by_epoch(train_in, train_labels)  # training for one epoch
     probs = system.predict(dev_in)
-    preds = evaluator.get_preds(ref_file=args.dev_ref_fname, probs=probs)
+    preds = evaluator.get_preds(ref_file=args.dev_ref_fname, probs=probs, out_file=args.out_dir+"/probs"+str(epoch))
     dev_map = evaluator.calc_mean_avg_prec(preds)
     dev_mrr = evaluator.calc_mean_reciprocal_rank(preds)
     logger.info("Devset MAP=" + str(dev_map) + ", MRR=" + str(dev_mrr))
