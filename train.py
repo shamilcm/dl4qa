@@ -7,7 +7,7 @@ from anssel import utils
 # Test#
 # Main method. The arguments to the training script!
 if __name__=="__main__":
-    parser = argparse.ArgumentParser();
+    parser = argparse.ArgumentParser()
     parser.add_argument("-tr", "--trainset-path", dest="train_fname", required=True, help="train file")
     parser.add_argument("-dev", "--devset-path", dest="dev_fname", required=True, help="development file")
     parser.add_argument("-devr", "--devset-ref", required=True, dest="dev_ref_fname", help="test reference file")
@@ -16,10 +16,10 @@ if __name__=="__main__":
     parser.add_argument("-emb", "--emb-path", required=True, dest="w2v_fname", help="path/name of pretrained word embeddings (Word2Vec inary). ")
     parser.add_argument("-d", "--device", dest="device", default="gpu", help="The computing device (cpu or gpu). Default: gpu")
     parser.add_argument("-s", "--system", dest="system", default="bow", help="bow | bigram | compdecomp")
-    parser.add_argument("-E", "--num-epochs", dest="num_epochs", default=20, type=int, help="Number of iterations (epochs). Default: 10")
+    parser.add_argument("-E", "--num-epochs", dest="num_epochs", default=20, type=int, help="Number of iterations (epochs). Default: 20")
     parser.add_argument("-B", "--batch-size", dest="batch_size", default=100, type=int, help="Minibatch size for training. Default: 100")
     parser.add_argument("-dir", "--output-directory", dest="out_dir", help="The output directory for log file, model, etc.")
-
+    parser.add_argument("-a", "--algorithm", dest="algorithm", type=str, metavar='<str>', default='rmsprop', help="Optimization algorithm (rmsprop|sgd|adagrad|adadelta|adam|adamax) (default=rmsprop)")
     args = parser.parse_args()
 
 
@@ -68,7 +68,7 @@ if(args.test_fname):
 
 logger.info("Building model")
 from anssel import models
-hyperparams = models.HyperParams(num_epochs=args.num_epochs, batch_size=args.batch_size, emb_dim=embeddings.emb_dim)
+hyperparams = models.HyperParams(num_epochs=args.num_epochs, batch_size=args.batch_size, emb_dim=embeddings.emb_dim, algorithm=args.algorithm)
 
 if args.system == "bow":
     system = models.BinaryBoWDense(hyperparams=hyperparams)

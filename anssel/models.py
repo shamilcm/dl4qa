@@ -14,7 +14,8 @@ logger = logging.getLogger(__name__)
 
 ### Hyper Parameters Class
 class HyperParams:
-    def __init__(self, num_epochs=20, batch_size=100, emb_dim=300):
+    def __init__(self, num_epochs=20, batch_size=100, emb_dim=300, algorithm='rmsprop'):
+        self.algorithm = algorithm
         self.num_epochs = num_epochs
         self.batch_size = batch_size
         self.emb_dim = emb_dim
@@ -100,7 +101,7 @@ class Wang2016CNN(BaseSystem):
         sequenceSminus = Input(shape=(None,300), dtype='float32')
 
         sequenceS = merge([sequenceSplus,sequenceSminus], mode='concat', concat_axis=-1)
-        # sequenceS = Masking(mask_value=0.0)(sequenceS)
+        sequenceS = Masking(mask_value=-999999)(sequenceS)
 
         convS1 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=1, border_mode=cnn_border_mode, subsample_length=1)(sequenceS)
         convS2 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=2, border_mode=cnn_border_mode, subsample_length=1)(sequenceS)
@@ -120,7 +121,7 @@ class Wang2016CNN(BaseSystem):
         sequenceTminus = Input(shape=(None,300), dtype='float32')
 
         sequenceT = merge([sequenceTplus,sequenceTminus], mode='concat', concat_axis=-1)
-        # sequenceT = Masking(mask_value=0.0)(sequenceT)
+        sequenceT = Masking(mask_value=-999999)(sequenceT)
 
         convT1 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=1, border_mode=cnn_border_mode, subsample_length=1)(sequenceT)
         convT2 = Conv1DWithMasking(nb_filter=cnn_dim, filter_length=2, border_mode=cnn_border_mode, subsample_length=1)(sequenceT)
@@ -145,7 +146,7 @@ class Wang2016CNN(BaseSystem):
         
         loss = 'binary_crossentropy'
         metric = 'accuracy'
-        algorithm = 'adam'
+        algorithm = hyperparams.algorithm
         
         ###############################################################################################################################
         ## Optimizer algorithm
@@ -189,12 +190,12 @@ class Wang2016CNN(BaseSystem):
             qplus, qminus, aplus, aminus = self.compose_decompose(qmatrix, amatrix)
             # Padding questions
             qpad_width = ((0,q_maxlen - qplus.shape[0]),(0,0))
-            qplus_pad  = np.pad(qplus,  pad_width=qpad_width, mode='constant', constant_values=0)
-            qminus_pad = np.pad(qminus, pad_width=qpad_width, mode='constant', constant_values=0)
+            qplus_pad  = np.pad(qplus,  pad_width=qpad_width, mode='constant', constant_values=-999999)
+            qminus_pad = np.pad(qminus, pad_width=qpad_width, mode='constant', constant_values=-999999)
             # Padding answers
             apad_width = ((0,a_maxlen - aplus.shape[0]),(0,0))
-            aplus_pad  = np.pad(aplus,  pad_width=apad_width, mode='constant', constant_values=0)
-            aminus_pad = np.pad(aminus, pad_width=apad_width, mode='constant', constant_values=0)
+            aplus_pad  = np.pad(aplus,  pad_width=apad_width, mode='constant', constant_values=-999999)
+            aminus_pad = np.pad(aminus, pad_width=apad_width, mode='constant', constant_values=-999999)
             # Adding these padded matrices to list
             qplus_list.append(qplus_pad)
             qminus_list.append(qminus_pad)
