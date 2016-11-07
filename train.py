@@ -27,10 +27,8 @@ utils.mkdir_p(args.out_dir)
 logger = logging.getLogger(__name__)
 utils.set_logger(args.out_dir)
 
-## Setting devie to use 
-os.environ['THEANO_FLAGS'] = 'device=' + args.device
-os.environ['THEANO_FLAGS'] = ',mode=FAST_RUN'
-os.environ['THEANO_FLAGS'] = ',floatX=float32'
+## Setting device to use 
+os.environ['THEANO_FLAGS'] = 'device=' + args.device + ',mode=FAST_RUN' + ',floatX=float32'
 
 ###########################
 # Loading datasets
